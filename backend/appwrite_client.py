@@ -18,7 +18,7 @@ APPWRITE_DATABASE_ID = os.getenv("APPWRITE_DATABASE_ID")
 # We will store all collection IDs here for easy access
 COLLECTION_SHOPS = os.getenv("COLLECTION_ID_SHOPS")
 COLLECTION_SERVICES = os.getenv("COLLECTION_ID_SERVICES")
-
+COLLECTION_BARBERS = os.getenv("COLLECTION_ID_BARBERS")
 
 # Initialize the Appwrite Client
 client = Client()
