@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query as FastQuery
 from typing import List, Optional
 from appwrite.query import Query
 from datetime import datetime, timedelta, timezone
+from logic.manager_logic import find_available_barbers_for_walk_in
 
 # Import Pydantic schemas and Appwrite client details
 import schemas
@@ -132,3 +133,19 @@ async def add_new_staff(shop_id: str, barber_data: schemas.BarberCreate):
     except Exception as e:
         print(f"An error occurred while adding new staff: {e}")
         raise HTTPException(status_code=500, detail="Failed to create new staff member.")
+    
+@router.get("/available-barbers", response_model=List[schemas.Barber])
+async def get_available_barbers_for_walk_in(shop_id: str, duration: int):
+    """
+    Finds and returns a list of barbers who are available to start a 
+    walk-in appointment of a given duration immediately.
+    """
+    if duration <= 0:
+        raise HTTPException(status_code=400, detail="Duration must be a positive number.")
+        
+    available_barbers = await find_available_barbers_for_walk_in(
+        shop_id=shop_id,
+        duration=duration
+    )
+    
+    return available_barbers
