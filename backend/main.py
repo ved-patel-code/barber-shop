@@ -5,7 +5,7 @@ from typing import List
 from appwrite.query import Query
 # Import schemas and appwrite_client as before
 import schemas
-from routers import booking, manager
+from routers import booking, manager, owner 
 from appwrite_client import (
     databases, 
     APPWRITE_DATABASE_ID, 
@@ -28,6 +28,7 @@ app = FastAPI(
 # Tell the main app to use the routes defined in the booking router
 app.include_router(booking.router)
 app.include_router(manager.router)
+app.include_router(owner.router)
 
 # --- API Endpoints ---
 @app.get("/")
