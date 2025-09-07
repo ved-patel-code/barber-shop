@@ -143,17 +143,34 @@ async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: 
         if working_end_dt > last_free_time_start:
             free_blocks.append((last_free_time_start, working_end_dt))
             
+          # --- PART 6: Generate 30-Minute Bookable Slots from Free Blocks ---
+
+        available_slots = []
+        slot_interval = timedelta(minutes=30)
+        appointment_duration = timedelta(minutes=total_duration)
+
+        # Iterate through each large free time window we found
+        for start_block, end_block in free_blocks:
+            
+            # Start checking for slots from the beginning of the free block
+            current_slot_start = start_block
+
+            # Keep adding slots as long as a full appointment can fit in the remaining block
+            while current_slot_start + appointment_duration <= end_block:
+                
+                # Add the current slot start time to our list of results
+                # We format it as a "HH:MM" string for the frontend
+                available_slots.append(current_slot_start.strftime("%H:%M"))
+
+                # Move to the next potential slot time (30 minutes later)
+                current_slot_start += slot_interval
+        
         print(f"Calculated Actual Working Hours: {working_start_dt.time()} - {working_end_dt.time()}")
         print(f"Found {len(appointments)} active appointments for the day.")
         print(f"Calculated {len(free_blocks)} free time blocks.")
-        
-        # For testing, we will return the free blocks themselves.
-        # We need to convert the datetime objects to strings to send them in a JSON response.
-        free_blocks_str = [
-            (start.strftime("%H:%M"), end.strftime("%H:%M")) for start, end in free_blocks
-        ]
-        
-        return free_blocks_str
+        print(f"Generated {len(available_slots)} available slots.")
+
+        return available_slots
 
     except Exception as e:
         print(f"An error occurred: {e}")
