@@ -3,9 +3,9 @@
 from fastapi import FastAPI, HTTPException
 from typing import List
 from appwrite.query import Query
-from routers import booking
 # Import schemas and appwrite_client as before
 import schemas
+from routers import booking, manager
 from appwrite_client import (
     databases, 
     APPWRITE_DATABASE_ID, 
@@ -27,6 +27,7 @@ app = FastAPI(
 # --- Include API Routers ---
 # Tell the main app to use the routes defined in the booking router
 app.include_router(booking.router)
+app.include_router(manager.router)
 
 # --- API Endpoints ---
 @app.get("/")

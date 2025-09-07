@@ -1,7 +1,7 @@
 # backend/schemas.py
 
 from pydantic import BaseModel, Field, EmailStr # <-- Added EmailStr for future-proofing, if you add email
-from typing import List, Optional
+from typing import List, Optional , Literal 
 from datetime import datetime
 
 # --- Base Schema for Appwrite Documents ---
@@ -41,3 +41,20 @@ class AppointmentCreate(BaseModel):
     start_time: datetime # Full datetime object expected
     service_ids: List[str] # List of Appwrite Document IDs for selected services
     is_walk_in: bool = False # Default to false for online bookings
+
+
+class AppointmentDetails(AppwriteBaseModel):
+    customer_id: str
+    barber_id: str
+    shop_id: str
+    start_time: datetime # Pydantic will parse the ISO string from Appwrite
+    end_time: datetime
+    status: str
+    bill_amount: float
+    total_amount: float
+    payment_status: bool
+    is_walk_in: bool
+
+    
+class AppointmentStatusUpdate(BaseModel):
+    status: Literal["InProgress", "Completed", "Cancelled", "Booked"]
