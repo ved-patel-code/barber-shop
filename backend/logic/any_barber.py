@@ -56,8 +56,25 @@ async def calculate_any_barber_availability(shop_id: str, date_str: str, total_d
     # The result will be a list of the return values from each task.
     all_individual_slots = await asyncio.gather(*tasks)
 
-    print(f"Fetched availability for {len(all_barbers)} barbers.")
-    print(f"Individual slot lists: {all_individual_slots}")
+     # --- PART 3: Aggregate and Unify the Time Slots ---
+
+    # Use a set to automatically handle duplicates.
+    # A set is a collection where each item must be unique.
+    unified_slots_set = set()
+
+    # Iterate through the list of lists
+    for barber_slots in all_individual_slots:
+        # Iterate through each time slot string in the inner list
+        for slot in barber_slots:
+            unified_slots_set.add(slot)
     
-    # For now, we will return this list of lists to test our progress.
-    return all_individual_slots
+    # Convert the set back to a list to be able to sort it
+    final_slots_list = list(unified_slots_set)
+    
+    # Sort the list chronologically (e.g., "09:00" comes before "10:30")
+    final_slots_list.sort()
+
+    print(f"Fetched availability for {len(all_barbers)} barbers.")
+    print(f"Unified into {len(final_slots_list)} unique available slots.")
+    
+    return final_slots_list
