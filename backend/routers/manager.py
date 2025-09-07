@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 # Import Pydantic schemas and Appwrite client details
 import schemas
-from appwrite_client import databases, APPWRITE_DATABASE_ID, COLLECTION_APPOINTMENTS
+from appwrite_client import COLLECTION_BARBERS, databases, APPWRITE_DATABASE_ID, COLLECTION_APPOINTMENTS
 from utils import TARGET_TIMEZONE # For handling dates correctly
 
 # Create a new router object for the manager dashboard
@@ -104,3 +104,31 @@ async def update_appointment_status(appointmentId: str, status_update: schemas.A
         # A more advanced implementation could check the error type.
         print(f"An error occurred updating appointment status: {e}")
         raise HTTPException(status_code=404, detail=f"Appointment with ID {appointmentId} not found or update failed.")
+    
+@router.post("/staff", response_model=schemas.BarberDetails, status_code=201)
+async def add_new_staff(shop_id: str, barber_data: schemas.BarberCreate):
+    """
+    Adds a new barber (staff) to a specific shop.
+    """
+    try:
+        # Prepare the data for the new document in the Barbers collection
+        new_barber_data = {
+            "name": barber_data.name,
+            "contact_info": barber_data.contact_info,
+            "shop_id": shop_id  # Associate the new barber with the manager's shop
+        }
+
+        # Call the Appwrite SDK to create the new document
+        created_document = databases.create_document(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_BARBERS,
+            document_id='unique()', # Let Appwrite generate a unique ID
+            data=new_barber_data
+        )
+
+        # Return the full document of the newly created barber
+        return created_document
+
+    except Exception as e:
+        print(f"An error occurred while adding new staff: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create new staff member.")

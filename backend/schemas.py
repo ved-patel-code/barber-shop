@@ -55,6 +55,16 @@ class AppointmentDetails(AppwriteBaseModel):
     payment_status: bool
     is_walk_in: bool
 
-    
+
 class AppointmentStatusUpdate(BaseModel):
     status: Literal["InProgress", "Completed", "Cancelled", "Booked"]
+
+class BarberCreate(BaseModel):
+    name: str
+    contact_info: Optional[str] = None
+
+# For the OUTGOING response after creating a new barber
+class BarberDetails(AppwriteBaseModel):
+    name: str
+    contact_info: Optional[str] = None
+    shop_id: str
