@@ -126,3 +126,5 @@ async def find_available_barbers_for_walk_in(shop_id: str, duration: int):
     except Exception as e:
         print(f"Error finding available barbers for walk-in: {e}")
         return []
+
+

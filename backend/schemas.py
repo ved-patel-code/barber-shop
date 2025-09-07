@@ -35,12 +35,14 @@ class CustomerCreate(BaseModel):
 
 class AppointmentCreate(BaseModel):
     """Schema for the full appointment booking request body."""
-    customer: CustomerCreate # Nested Pydantic model for customer info
+    customer: CustomerCreate
     shop_id: str
-    barber_id: Optional[str] = None # Will be null if "Any Barber" was chosen by user
-    start_time: datetime # Full datetime object expected
-    service_ids: List[str] # List of Appwrite Document IDs for selected services
-    is_walk_in: bool = False # Default to false for online bookings
+    barber_id: str # No longer optional, must be a specific ID
+    start_time: datetime
+    service_ids: List[str]
+    is_walk_in: bool = False
+    # --- NEW: Add an optional status field ---
+    status: Optional[Literal["Booked", "InProgress"]] = "Booked" # Default to "Booked"
 
 
 class AppointmentDetails(AppwriteBaseModel):
@@ -68,3 +70,21 @@ class BarberDetails(AppwriteBaseModel):
     name: str
     contact_info: Optional[str] = None
     shop_id: str
+
+
+class DailySchedule(BaseModel):
+    day_of_week: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    start_time: str # e.g., "09:00"
+    end_time: str   # e.g., "17:00"
+    is_day_off: bool
+
+# Represents the full weekly schedule payload for a barber
+class WeeklyScheduleUpdate(BaseModel):
+    schedules: List[DailySchedule]
+
+class FinancialsReport(BaseModel):
+    total_revenue_before_tax: float
+    total_tax_collected: float
+    total_revenue_after_tax: float
+    total_appointments: int
+    filter_period: str
