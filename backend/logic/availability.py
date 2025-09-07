@@ -12,6 +12,13 @@ from appwrite_client import (
 
 )
 
+def parse_iso_to_datetime(iso_string: str) -> datetime:
+    # Appwrite returns ISO 8601 format with timezone info.
+    # We strip the timezone to make all our datetime objects "naive" for simple comparison.
+    dt_aware = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
+    return dt_aware.replace(tzinfo=None)
+
+
 async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: str, total_duration: int):
     """
     Calculates the available time slots for a single barber on a specific date.
@@ -112,11 +119,41 @@ async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: 
         
         appointments = appointments_response['documents']
         
+         # --- PART 5: Calculate the "Free Time" Blocks (The Core Algorithm) ---
+
+        free_blocks = []
+        # Start tracking free time from the beginning of the barber's actual working day.
+        last_free_time_start = working_start_dt
+
+        # Loop through each sorted appointment to find the gaps
+        for appointment in appointments:
+            appointment_start = parse_iso_to_datetime(appointment['start_time'])
+            appointment_end = parse_iso_to_datetime(appointment['end_time'])
+
+            # The free block is the time between our last known free point and the start of this appointment.
+            # Only add the block if there is a positive amount of free time.
+            if appointment_start > last_free_time_start:
+                free_blocks.append((last_free_time_start, appointment_start))
+            
+            # Update our tracker to the end of the current appointment, as this is the start of the next potential free block.
+            last_free_time_start = appointment_end
+        
+        # After the loop, calculate the final free block from the end of the last appointment to the end of the day.
+        # Again, only add it if there is a positive amount of time.
+        if working_end_dt > last_free_time_start:
+            free_blocks.append((last_free_time_start, working_end_dt))
+            
         print(f"Calculated Actual Working Hours: {working_start_dt.time()} - {working_end_dt.time()}")
         print(f"Found {len(appointments)} active appointments for the day.")
+        print(f"Calculated {len(free_blocks)} free time blocks.")
         
-        # New placeholder for testing
-        return [f"Found {len(appointments)} appointments between {working_start_dt.time()} and {working_end_dt.time()}"]
+        # For testing, we will return the free blocks themselves.
+        # We need to convert the datetime objects to strings to send them in a JSON response.
+        free_blocks_str = [
+            (start.strftime("%H:%M"), end.strftime("%H:%M")) for start, end in free_blocks
+        ]
+        
+        return free_blocks_str
 
     except Exception as e:
         print(f"An error occurred: {e}")
