@@ -1,5 +1,6 @@
 # backend/logic/availability.py
 
+import asyncio
 from datetime import datetime, time, timedelta
 from appwrite.query import Query
 # Import our Appwrite database client and collection IDs
@@ -175,3 +176,81 @@ async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: 
     except Exception as e:
         print(f"An error occurred: {e}")
         return []
+    
+
+
+async def is_barber_working_on_date(barber_id: str, shop_id: str, date_str: str) -> bool:
+    """
+    Checks if a specific barber is scheduled and the shop is open on a given date.
+    This is a fast check that does NOT calculate slots.
+    """
+    try:
+        selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+        day_of_week = selected_date.strftime("%A")
+
+        # --- FIX: Run these synchronous calls directly ---
+        
+        # Query for the barber's schedule for that day
+        schedule_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SCHEDULES,
+            queries=[Query.equal("barber_id", [barber_id]), Query.equal("day_of_week", [day_of_week]), Query.limit(1)]
+        )
+
+        # Query for the shop's timing for that day
+        shop_timing_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SHOP_TIMINGS,
+            queries=[Query.equal("shop_id", [shop_id]), Query.equal("day_of_week", [day_of_week]), Query.limit(1)]
+        )
+
+
+        # Check if both schedule and timings exist
+        if not schedule_response['documents'] or not shop_timing_response['documents']:
+            return False
+
+        # Check if barber has day off or shop is closed
+        if schedule_response['documents'][0]['is_day_off'] or shop_timing_response['documents'][0]['is_closed']:
+            return False
+
+        # If all checks pass, the date is potentially available
+        return True
+    except Exception:
+        return False
+
+# NEW LIGHTWEIGHT FUNCTION FOR ANY BARBER
+async def is_any_barber_working_on_date(shop_id: str, date_str: str) -> bool:
+    """
+    Checks if ANY barber is scheduled and the shop is open on a given date.
+    This is a fast check that does NOT calculate slots.
+    """
+    try:
+        selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+        day_of_week = selected_date.strftime("%A")
+
+        # 1. First, check if the shop is even open.
+        shop_timing_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SHOP_TIMINGS,
+            queries=[Query.equal("shop_id", [shop_id]), Query.equal("day_of_week", [day_of_week]), Query.limit(1)]
+        )
+        if not shop_timing_response['documents'] or shop_timing_response['documents'][0]['is_closed']:
+            return False
+
+        # 2. Then, check if at least ONE barber is working.
+        # REMINDER: This requires 'shop_id' attribute in the Schedules collection.
+        barber_schedule_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SCHEDULES,
+            queries=[
+                Query.equal("shop_id", [shop_id]),
+                Query.equal("day_of_week", [day_of_week]),
+                Query.equal("is_day_off", [False]),
+                Query.limit(1)
+            ]
+        )
+        
+        # If we found at least one document, a barber is working.
+        return bool(barber_schedule_response['documents'])
+    except Exception:
+        return False

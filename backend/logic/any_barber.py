@@ -1,11 +1,14 @@
 # backend/logic/any_barber.py
 
 import asyncio
+from datetime import datetime
 
 from appwrite.query import Query
 
 # Import our Appwrite database client and collection IDs
 from appwrite_client import (
+    COLLECTION_SCHEDULES,
+    COLLECTION_SHOP_TIMINGS,
     databases, 
     APPWRITE_DATABASE_ID, 
     COLLECTION_BARBERS
@@ -78,3 +81,48 @@ async def calculate_any_barber_availability(shop_id: str, date_str: str, total_d
     print(f"Unified into {len(final_slots_list)} unique available slots.")
     
     return final_slots_list
+
+async def check_any_barber_date_availability(shop_id: str, date_str: str):
+    """
+    Quickly checks if a date is potentially available for "Any Barber"
+    by verifying if at least one barber is working and the shop is open.
+    This avoids expensive slot calculation.
+    """
+    try:
+        selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+        day_of_week = selected_date.strftime("%A")
+
+        # 1. Check if the shop is even open on that day of the week
+        shop_timing_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SHOP_TIMINGS,
+            queries=[
+                Query.equal("shop_id", [shop_id]),
+                Query.equal("day_of_week", [day_of_week]),
+                Query.limit(1)
+            ]
+        )
+        if not shop_timing_response['documents'] or shop_timing_response['documents'][0]['is_closed']:
+            return False # Shop is closed, so no availability
+
+        # 2. Check if at least ONE barber is scheduled to work and is NOT on a day off
+        barber_schedule_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SCHEDULES,
+            queries=[
+                Query.equal("shop_id", [shop_id]), # We can add shop_id to schedules for faster lookup
+                Query.equal("day_of_week", [day_of_week]),
+                Query.equal("is_day_off", [False]),
+                Query.limit(1) # We only need to find one, not all of them
+            ]
+        )
+        
+        # If the document list is not empty, it means we found at least one working barber
+        if barber_schedule_response['documents']:
+            return True # Date is available!
+        
+        return False # No working barbers found
+
+    except Exception as e:
+        print(f"Error in check_any_barber_date_availability: {e}")
+        return False
