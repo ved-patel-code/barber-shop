@@ -12,12 +12,8 @@ from appwrite_client import (
     COLLECTION_APPOINTMENTS
 
 )
+from utils import parse_iso_to_datetime
 
-def parse_iso_to_datetime(iso_string: str) -> datetime:
-    # Appwrite returns ISO 8601 format with timezone info.
-    # We strip the timezone to make all our datetime objects "naive" for simple comparison.
-    dt_aware = datetime.fromisoformat(iso_string.replace('Z', '+00:00'))
-    return dt_aware.replace(tzinfo=None)
 
 
 async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: str, total_duration: int):
