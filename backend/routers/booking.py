@@ -4,7 +4,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException
 from typing import List
 from appwrite.query import Query
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from logic.availability import calculate_barber_availability
 from logic.availability import is_barber_working_on_date, is_any_barber_working_on_date
 from logic.any_barber import calculate_any_barber_availability
@@ -12,6 +12,7 @@ from datetime import timedelta
 import uuid
 # Import our new utils function
 from utils import parse_iso_to_datetime
+from utils import TARGET_TIMEZONE
 # Import the new Pydantic model for the request body
 import schemas
 
@@ -80,10 +81,18 @@ async def get_available_dates(shop_id: str, barber_id: str):
     Calculates the available DATES for the next 7 days by checking
     if the shop is open and the barber is scheduled to work.
     """
-    today = datetime.now().date()
+     # --- CHANGE HERE: Calculate 'today' based on TARGET_TIMEZONE ---
+    # 1. Get current UTC time
+    now_utc = datetime.now(timezone.utc)
+    # 2. Convert to target timezone
+    now_local_to_shop = now_utc.astimezone(TARGET_TIMEZONE)
+    # 3. Extract the date
+    today_local_to_shop = now_local_to_shop.date()
+    # --- END CHANGE ---
     
     # Create a list of all 7 date strings we need to check
-    date_strs_to_check = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    # We now use today_local_to_shop instead of the server's naive today
+    date_strs_to_check = [(today_local_to_shop + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
     
     tasks = []
     # Decide which lightweight function to use
@@ -156,6 +165,12 @@ async def create_appointment(appointment_data: schemas.AppointmentCreate):
 
 
     try:
+# --- CHANGE 1: CONVERT TIMES TO UTC FOR DOUBLE-BOOKING CHECK ---
+        # Treat the incoming naive times as being in our target timezone, then convert to UTC for the query
+        local_start_check = appointment_data.start_time.replace(tzinfo=TARGET_TIMEZONE)
+        local_end_check = appointment_end_time.replace(tzinfo=TARGET_TIMEZONE)
+        utc_start_check = local_start_check.astimezone(timezone.utc)
+        utc_end_check = local_end_check.astimezone(timezone.utc)
         # We need to check for any appointments that *overlap* with the requested slot.
         # An overlap occurs if an existing appointment:
         # 1. Starts during our requested slot.
@@ -171,10 +186,8 @@ async def create_appointment(appointment_data: schemas.AppointmentCreate):
             queries=[
                 Query.equal("barber_id", [appointment_data.barber_id]),
                 Query.not_equal("status", ["Cancelled"]),
-                # Find appointments whose start time is before our new one ends
-                Query.less_than("start_time", appointment_end_time.isoformat()),
-                # Find appointments whose end time is after our new one begins
-                Query.greater_than("end_time", appointment_data.start_time.isoformat())
+                Query.less_than("start_time", utc_end_check.isoformat()),
+                Query.greater_than("end_time", utc_start_check.isoformat())
             ]
         )
 
@@ -227,13 +240,13 @@ async def create_appointment(appointment_data: schemas.AppointmentCreate):
                 "customer_id": created_customer_id,
                 "barber_id": appointment_data.barber_id,
                 "shop_id": appointment_data.shop_id,
-                "start_time": appointment_data.start_time.isoformat(),
-                "end_time": appointment_end_time.isoformat(),
-                "status": "Booked", # Initial status
+                "start_time": utc_start_check.isoformat(), # Use UTC time
+                "end_time": utc_end_check.isoformat(),     # Use UTC time
+                "status": "Booked",
                 "is_walk_in": appointment_data.is_walk_in,
-                "payment_status": False, # Default to not paid
+                "payment_status": False,
                 "bill_amount": bill_amount,
-                "total_amount": round(total_amount, 2) # Round to 2 decimal places
+                "total_amount": round(total_amount, 2)
             }
         )
         created_appointment_id = appointment_document['$id']
