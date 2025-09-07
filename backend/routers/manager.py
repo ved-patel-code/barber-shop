@@ -5,10 +5,11 @@ from typing import List, Optional
 from appwrite.query import Query
 from datetime import datetime, timedelta, timezone
 from logic.manager_logic import find_available_barbers_for_walk_in
+import calendar
 
 # Import Pydantic schemas and Appwrite client details
 import schemas
-from appwrite_client import COLLECTION_BARBERS, databases, APPWRITE_DATABASE_ID, COLLECTION_APPOINTMENTS
+from appwrite_client import COLLECTION_BARBERS, COLLECTION_SCHEDULES, databases, APPWRITE_DATABASE_ID, COLLECTION_APPOINTMENTS
 from utils import TARGET_TIMEZONE # For handling dates correctly
 
 # Create a new router object for the manager dashboard
@@ -149,3 +150,165 @@ async def get_available_barbers_for_walk_in(shop_id: str, duration: int):
     )
     
     return available_barbers
+
+@router.post("/staff/{barberId}/schedule", status_code=200)
+async def update_barber_schedule(
+    barberId: str, 
+    shop_id: str, # Passed as a query param for security/scoping
+    schedule_data: schemas.WeeklyScheduleUpdate
+):
+    """
+    Updates or creates the weekly schedule for a specific barber.
+    This performs an "upsert" operation for each day of the week provided.
+    """
+    try:
+        # Loop through each daily schedule provided in the request
+        for day_schedule in schedule_data.schedules:
+            
+            # 1. Try to find an existing schedule document for this barber and day
+            existing_schedule_response = databases.list_documents(
+                database_id=APPWRITE_DATABASE_ID,
+                collection_id=COLLECTION_SCHEDULES,
+                queries=[
+                    Query.equal("barber_id", [barberId]),
+                    Query.equal("day_of_week", [day_schedule.day_of_week]),
+                    Query.limit(1)
+                ]
+            )
+
+            schedule_update_data = {
+                "start_time": day_schedule.start_time,
+                "end_time": day_schedule.end_time,
+                "is_day_off": day_schedule.is_day_off,
+                "barber_id": barberId,
+                "shop_id": shop_id, # Ensure shop_id is always set
+                "day_of_week": day_schedule.day_of_week
+            }
+
+            if existing_schedule_response['documents']:
+                # 2a. If a schedule exists, UPDATE it
+                document_id_to_update = existing_schedule_response['documents'][0]['$id']
+                databases.update_document(
+                    database_id=APPWRITE_DATABASE_ID,
+                    collection_id=COLLECTION_SCHEDULES,
+                    document_id=document_id_to_update,
+                    data=schedule_update_data
+                )
+            else:
+                # 2b. If no schedule exists, CREATE a new one
+                databases.create_document(
+                    database_id=APPWRITE_DATABASE_ID,
+                    collection_id=COLLECTION_SCHEDULES,
+                    document_id='unique()',
+                    data=schedule_update_data
+                )
+        
+        return {"status": "success", "message": f"Schedule for barber {barberId} has been updated."}
+
+    except Exception as e:
+        print(f"An error occurred while updating schedule: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update barber's schedule.")
+    
+
+@router.get("/financials", response_model=schemas.FinancialsReport)
+async def get_manager_financials(
+    shop_id: str,
+    date: Optional[str] = FastQuery(None, description="A specific date in YYYY-MM-DD format."),
+    month: Optional[str] = FastQuery(None, description="A specific month in YYYY-MM format.")
+):
+    """
+    Calculates financial totals for a given shop for a specific day or month.
+    If no date or month is provided, it defaults to the current day.
+    """
+    if date and month:
+        raise HTTPException(status_code=400, detail="Please provide either a 'date' or a 'month', not both.")
+
+    now_local = datetime.now(TARGET_TIMEZONE)
+    filter_period_str = ""
+
+    # --- Determine the time range for the query ---
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+            filter_period_str = f"for date {date}"
+            day_start_local = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=TARGET_TIMEZONE)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Please use YYYY-MM-DD.")
+    elif month:
+        try:
+            year, month_num = map(int, month.split('-'))
+            filter_period_str = f"for month {month}"
+            # Get the first day of the month
+            day_start_local = datetime(year, month_num, 1, tzinfo=TARGET_TIMEZONE)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid month format. Please use YYYY-MM.")
+    else:
+        # Default to the current day
+        target_date = now_local.date()
+        filter_period_str = f"for today, {target_date.strftime('%Y-%m-%d')}"
+        day_start_local = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=TARGET_TIMEZONE)
+    
+    # Calculate the end of the period
+    if month:
+        _, last_day = calendar.monthrange(day_start_local.year, day_start_local.month)
+        day_end_local = day_start_local.replace(day=last_day, hour=23, minute=59, second=59)
+    else: # Daily
+        day_end_local = day_start_local + timedelta(days=1)
+
+    # Convert local time range to UTC for Appwrite query
+    day_start_utc = day_start_local.astimezone(timezone.utc)
+    day_end_utc = day_end_local.astimezone(timezone.utc)
+
+    try:
+        # --- Query and Aggregate Data ---
+        # Appwrite does not support server-side aggregation (SUM), so we must fetch all documents and sum them in our code.
+        # We'll use pagination to handle potentially large numbers of appointments.
+        
+        all_completed_appointments = []
+        offset = 0
+        limit = 100 # Fetch 100 documents at a time
+
+        while True:
+            response = databases.list_documents(
+                database_id=APPWRITE_DATABASE_ID,
+                collection_id=COLLECTION_APPOINTMENTS,
+                queries=[
+                    Query.equal("shop_id", [shop_id]),
+                    Query.equal("status", ["Completed"]), # Only count completed appointments
+                    Query.greater_than_equal("start_time", day_start_utc.isoformat()),
+                    Query.less_than("start_time", day_end_utc.isoformat()),
+                    Query.limit(limit),
+                    Query.offset(offset)
+                ]
+            )
+            
+            documents = response['documents']
+            all_completed_appointments.extend(documents)
+            
+            if len(documents) < limit:
+                # We've fetched all the documents
+                break
+            
+            offset += limit
+
+        # --- Calculate Totals ---
+        total_revenue = 0.0
+        total_pre_tax = 0.0
+        
+        for appt in all_completed_appointments:
+            total_revenue += appt.get('total_amount', 0)
+            total_pre_tax += appt.get('bill_amount', 0)
+        
+        total_tax = total_revenue - total_pre_tax
+        
+        return {
+            "total_revenue_before_tax": round(total_pre_tax, 2),
+            "total_tax_collected": round(total_tax, 2),
+            "total_revenue_after_tax": round(total_revenue, 2),
+            "total_appointments": len(all_completed_appointments),
+            "filter_period": filter_period_str
+        }
+
+    except Exception as e:
+        print(f"An error occurred while generating financials: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate financial report.")

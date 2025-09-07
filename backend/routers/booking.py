@@ -230,6 +230,8 @@ async def create_appointment(appointment_data: schemas.AppointmentCreate):
         tax_rate = shop_document['tax_rate']
         total_amount = bill_amount * (1 + tax_rate)
 
+        appointment_status = appointment_data.status
+
         # Create the appointment document
         new_appointment_id = 'unique()'
         appointment_document = databases.create_document(
@@ -242,7 +244,7 @@ async def create_appointment(appointment_data: schemas.AppointmentCreate):
                 "shop_id": appointment_data.shop_id,
                 "start_time": utc_start_check.isoformat(), # Use UTC time
                 "end_time": utc_end_check.isoformat(),     # Use UTC time
-                "status": "Booked",
+                "status": appointment_status,
                 "is_walk_in": appointment_data.is_walk_in,
                 "payment_status": False,
                 "bill_amount": bill_amount,
