@@ -2,13 +2,14 @@
 
 from datetime import datetime, time, timedelta
 from appwrite.query import Query
-import asyncio
 # Import our Appwrite database client and collection IDs
 from appwrite_client import (
     databases, 
     APPWRITE_DATABASE_ID, 
     COLLECTION_SCHEDULES, 
-    COLLECTION_SHOP_TIMINGS
+    COLLECTION_SHOP_TIMINGS,
+    COLLECTION_APPOINTMENTS
+
 )
 
 async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: str, total_duration: int):
@@ -86,12 +87,36 @@ async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: 
             print("Calculated working hours are invalid (start is after end).")
             return []
 
-        print(f"Barber Schedule: {barber_start_time} - {barber_end_time}")
-        print(f"Shop Timing: {shop_open_time} - {shop_close_time}")
-        print(f"Calculated Actual Working Hours: {working_start_dt.time()} - {working_end_dt.time()}")
+        # --- PART 4: Fetch Existing Appointments for the Day (CORRECTED) ---
+
+        day_start = selected_date.replace(hour=0, minute=0, second=0)
+        day_end = day_start + timedelta(days=1)
         
-        # For now, return a new placeholder
-        return [f"Calculated working hours: {actual_start_time} to {actual_end_time}"]
+        day_start_iso = day_start.isoformat()
+        day_end_iso = day_end.isoformat()
+
+        # Build the queries with the CORRECT method names
+        appointment_queries = [
+            Query.equal("barber_id", [barber_id]),
+            Query.greater_than_equal("start_time", day_start_iso), # CORRECTED
+            Query.less_than("start_time", day_end_iso),           # CORRECTED
+            Query.not_equal("status", ["Cancelled"]),             # CORRECTED
+            Query.order_asc("start_time")                         # CORRECTED
+        ]
+        
+        appointments_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_APPOINTMENTS,
+            queries=appointment_queries
+        )
+        
+        appointments = appointments_response['documents']
+        
+        print(f"Calculated Actual Working Hours: {working_start_dt.time()} - {working_end_dt.time()}")
+        print(f"Found {len(appointments)} active appointments for the day.")
+        
+        # New placeholder for testing
+        return [f"Found {len(appointments)} appointments between {working_start_dt.time()} and {working_end_dt.time()}"]
 
     except Exception as e:
         print(f"An error occurred: {e}")
