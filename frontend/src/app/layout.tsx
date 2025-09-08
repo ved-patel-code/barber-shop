@@ -1,14 +1,11 @@
-// src/app/layout.tsx
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-import Header from "./components/shared/Header"; // <-- IMPORT THE HEADER
-
-const inter = Inter({ subsets: ["latin"] });
+import Header from "./components/shared/Header";
+import { CartProvider } from "./components/context/CartContext";
 
 export const metadata: Metadata = {
   title: "Barber Shop",
-  description: "Book your next appointment online.",
+  description: "Book your barber appointment online",
 };
 
 export default function RootLayout({
@@ -18,9 +15,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <Header /> {/* <-- ADD THE HEADER COMPONENT HERE */}
-        <main className="container py-8">{children}</main>
+      <body>
+        <CartProvider>
+          <Header />
+          <main>{children}</main>
+        </CartProvider>
       </body>
     </html>
   );
