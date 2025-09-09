@@ -1,5 +1,6 @@
 # backend/routers/manager.py
 
+import asyncio
 from fastapi import APIRouter, HTTPException, Query as FastQuery
 from typing import List, Optional
 from appwrite.query import Query
@@ -154,56 +155,70 @@ async def get_available_barbers_for_walk_in(shop_id: str, duration: int):
 @router.post("/staff/{barberId}/schedule", status_code=200)
 async def update_barber_schedule(
     barberId: str, 
-    shop_id: str, # Passed as a query param for security/scoping
+    shop_id: str,
     schedule_data: schemas.WeeklyScheduleUpdate
 ):
     """
-    Updates or creates the weekly schedule for a specific barber.
-    This performs an "upsert" operation for each day of the week provided.
+    Efficiently updates or creates the weekly schedule for a specific barber.
+    Fetches the existing week's schedule in one call and performs all updates/creates concurrently.
     """
     try:
-        # Loop through each daily schedule provided in the request
-        for day_schedule in schedule_data.schedules:
-            
-            # 1. Try to find an existing schedule document for this barber and day
-            existing_schedule_response = databases.list_documents(
-                database_id=APPWRITE_DATABASE_ID,
-                collection_id=COLLECTION_SCHEDULES,
-                queries=[
-                    Query.equal("barber_id", [barberId]),
-                    Query.equal("day_of_week", [day_schedule.day_of_week]),
-                    Query.limit(1)
-                ]
-            )
+        # --- PART 1: Fetch Existing Data (1 DB Call) ---
+        existing_schedule_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SCHEDULES,
+            queries=[Query.equal("barber_id", [barberId])]
+        )
 
+        # --- PART 2: Create a Lookup Map ---
+        existing_schedule_map = {
+            item['day_of_week']: item for item in existing_schedule_response['documents']
+        }
+
+        # --- PART 3 & 4: Prepare Write Tasks in a Loop ---
+        tasks = []
+        for day_schedule in schedule_data.schedules:
+            day = day_schedule.day_of_week
+            
             schedule_update_data = {
                 "start_time": day_schedule.start_time,
                 "end_time": day_schedule.end_time,
                 "is_day_off": day_schedule.is_day_off,
                 "barber_id": barberId,
-                "shop_id": shop_id, # Ensure shop_id is always set
-                "day_of_week": day_schedule.day_of_week
+                "shop_id": shop_id,
+                "day_of_week": day
             }
-
-            if existing_schedule_response['documents']:
-                # 2a. If a schedule exists, UPDATE it
-                document_id_to_update = existing_schedule_response['documents'][0]['$id']
-                databases.update_document(
+            
+            # --- PART 5: Decide and Prepare Task ---
+            if day in existing_schedule_map:
+                # If the day exists in our map, we UPDATE
+                document_id_to_update = existing_schedule_map[day]['$id']
+                
+                # Appwrite SDK calls are synchronous, so we need to wrap them to run concurrently
+                task = asyncio.to_thread(
+                    databases.update_document,
                     database_id=APPWRITE_DATABASE_ID,
                     collection_id=COLLECTION_SCHEDULES,
                     document_id=document_id_to_update,
                     data=schedule_update_data
                 )
+                tasks.append(task)
             else:
-                # 2b. If no schedule exists, CREATE a new one
-                databases.create_document(
+                # If the day does not exist, we CREATE
+                task = asyncio.to_thread(
+                    databases.create_document,
                     database_id=APPWRITE_DATABASE_ID,
                     collection_id=COLLECTION_SCHEDULES,
                     document_id='unique()',
                     data=schedule_update_data
                 )
+                tasks.append(task)
         
-        return {"status": "success", "message": f"Schedule for barber {barberId} has been updated."}
+        # --- PART 6: Execute All Writes Concurrently ---
+        if tasks:
+            await asyncio.gather(*tasks)
+        
+        return {"status": "success", "message": f"Schedule for barber {barberId} has been successfully updated."}
 
     except Exception as e:
         print(f"An error occurred while updating schedule: {e}")

@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, time, timedelta
+from typing import List
 from appwrite.query import Query
 # Import our Appwrite database client and collection IDs
 from appwrite_client import (
@@ -174,7 +175,7 @@ async def calculate_barber_availability(barber_id: str, shop_id: str, date_str: 
         return []
     
 
-
+# deprecated not in use as it was too slow and the function which called this funation is also changed.
 async def is_barber_working_on_date(barber_id: str, shop_id: str, date_str: str) -> bool:
     """
     Checks if a specific barber is scheduled and the shop is open on a given date.
@@ -250,3 +251,53 @@ async def is_any_barber_working_on_date(shop_id: str, date_str: str) -> bool:
         return bool(barber_schedule_response['documents'])
     except Exception:
         return False
+    
+
+async def get_weekly_available_dates_for_barber(
+    barber_id: str, 
+    shop_id: str, 
+    date_strs_to_check: List[str]
+) -> List[str]:
+    """
+    Efficiently finds available dates for a single barber over a given
+    period by fetching the entire weekly schedule in just two DB calls.
+    """
+    try:
+        # 1. Fetch the barber's entire weekly schedule in one call
+        schedule_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SCHEDULES,
+            queries=[Query.equal("barber_id", [barber_id])]
+        )
+        
+        # 2. Fetch the shop's entire weekly timings in one call
+        shop_timing_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SHOP_TIMINGS,
+            queries=[Query.equal("shop_id", [shop_id])]
+        )
+
+        # 3. Convert the lists into efficient lookup dictionaries (hash maps)
+        schedule_map = {item['day_of_week']: item for item in schedule_response['documents']}
+        shop_timing_map = {item['day_of_week']: item for item in shop_timing_response['documents']}
+
+        # 4. Loop through the dates in Python (very fast) and check availability
+        available_dates = []
+        for date_str in date_strs_to_check:
+            selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+            day_of_week = selected_date.strftime("%A")
+            
+            # Instantly look up the schedule and timing for that day
+            barber_schedule = schedule_map.get(day_of_week)
+            shop_timing = shop_timing_map.get(day_of_week)
+
+            # Check for availability
+            if barber_schedule and shop_timing: # Ensure both records exist for the day
+                if not barber_schedule['is_day_off'] and not shop_timing['is_closed']:
+                    available_dates.append(date_str)
+        
+        return available_dates
+
+    except Exception as e:
+        print(f"Error in get_weekly_available_dates_for_barber: {e}")
+        return []

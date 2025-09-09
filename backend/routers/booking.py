@@ -6,7 +6,7 @@ from typing import List
 from appwrite.query import Query
 from datetime import datetime, timedelta, timezone
 from logic.availability import calculate_barber_availability
-from logic.availability import is_barber_working_on_date, is_any_barber_working_on_date
+from logic.availability import is_barber_working_on_date, is_any_barber_working_on_date, get_weekly_available_dates_for_barber
 from logic.any_barber import calculate_any_barber_availability
 from datetime import timedelta
 import uuid
@@ -81,35 +81,29 @@ async def get_available_dates(shop_id: str, barber_id: str):
     Calculates the available DATES for the next 7 days by checking
     if the shop is open and the barber is scheduled to work.
     """
-     # --- CHANGE HERE: Calculate 'today' based on TARGET_TIMEZONE ---
-    # 1. Get current UTC time
+    # 1. Generate the list of dates to check (no change here)
     now_utc = datetime.now(timezone.utc)
-    # 2. Convert to target timezone
     now_local_to_shop = now_utc.astimezone(TARGET_TIMEZONE)
-    # 3. Extract the date
     today_local_to_shop = now_local_to_shop.date()
-    # --- END CHANGE ---
-    
-    # Create a list of all 7 date strings we need to check
-    # We now use today_local_to_shop instead of the server's naive today
     date_strs_to_check = [(today_local_to_shop + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
     
-    tasks = []
-    # Decide which lightweight function to use
+    # 2. Decide which logic path to take
     if barber_id.lower() == "any":
+        # --- ANY BARBER LOGIC (Still uses the old, slower method for now) ---
+        tasks = []
         for date_str in date_strs_to_check:
             tasks.append(is_any_barber_working_on_date(shop_id=shop_id, date_str=date_str))
+        results = await asyncio.gather(*tasks)
+        available_dates = [date_str for date_str, is_available in zip(date_strs_to_check, results) if is_available]
+        return available_dates
     else:
-        for date_str in date_strs_to_check:
-            tasks.append(is_barber_working_on_date(barber_id=barber_id, shop_id=shop_id, date_str=date_str))
-    
-    # Run all 7 checks concurrently for maximum speed
-    results = await asyncio.gather(*tasks)
-    
-    # Build the final list of dates that returned True
-    available_dates = [date_str for date_str, is_available in zip(date_strs_to_check, results) if is_available]
-    
-    return available_dates
+        # --- SPECIFIC BARBER LOGIC (Uses the new, fast method) ---
+        # Make one single call to our new efficient function
+        return await get_weekly_available_dates_for_barber(
+            barber_id=barber_id,
+            shop_id=shop_id,
+            date_strs_to_check=date_strs_to_check
+        )
 
 
 @router.get("/availability/slots", response_model=List[str])
