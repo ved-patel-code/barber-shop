@@ -8,6 +8,7 @@ import type {
   RawServiceDocument, // <-- NEW
   RawShopDocument, // <-- NEW
   RawBarberDocument, // <-- NEW
+  AppointmentPayload,
 } from "./types";
 
 const api = axios.create({
@@ -35,13 +36,13 @@ export const getAllServices = async (): Promise<Service[]> => {
 // API function to get all shops
 export const getAllShops = async (): Promise<Shop[]> => {
   try {
-    const response = await api.get<RawShopDocument[]>("/api/shops"); // <-- Specify response type
-    // The 'shop' parameter is now strongly typed
+    const response = await api.get<RawShopDocument[]>("/api/shops");
     const shops = response.data.map((shop: RawShopDocument) => ({
       id: shop.$id,
       name: shop.name,
       address: shop.address,
       phone_number: shop.phone_number,
+      tax_rate: shop.tax_rate, // <-- ADDED
     }));
     return shops;
   } catch (error) {
@@ -107,20 +108,10 @@ export const getAvailableSlots = async (
   }
 };
 
-// --- Appointment Creation Types and Function ---
-export interface AppointmentPayload {
-  customer: {
-    name: string;
-    phone_number: string;
-    gender: string | null;
-  };
-  shop_id: string;
-  barber_id: string;
-  start_time: string; // ISO 8601 format
-  service_ids: string[];
-}
+
 
 export const createAppointment = async (payload: AppointmentPayload) => {
+  // The old AppointmentPayload interface is now defined in types.ts
   const response = await api.post("/api/appointments", payload);
   return response.data;
 };

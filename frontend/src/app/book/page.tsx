@@ -1,7 +1,8 @@
 // src/app/book/page.tsx
 "use client";
 
-import { useEffect, useState } from "react"; // <-- ADD useEffect
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +15,6 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "../components/context/CartContext";
 import { useRouter } from "next/navigation";
-// --- NEW IMPORTS ---
 import {
   getAllShops,
   getBarbersByShopId,
@@ -22,25 +22,23 @@ import {
   getAvailableSlots,
 } from "@/lib/api";
 import type { Shop, Barber } from "@/lib/types";
-import Link from "next/link";
 import { formatInTimeZone } from "date-fns-tz";
 import { SHOP_TIMEZONE } from "@/lib/utils";
-// --- END NEW IMPORTS ---
 
 export default function BookingPage() {
   const { selectedServices, totalPrice, totalDuration, setBookingSelections } =
     useCart();
   const router = useRouter();
 
-  // --- State Management for Booking Flow ---
-  const [selectedShop, setSelectedShop] = useState<string | null>(null);
-  const [selectedBarber, setSelectedBarber] = useState<string | null>(null);
+  // State to hold selected IDs for UI dropdowns
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
+  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
-  // --- State for holding fetched data from API ---
-  const [shops, setShops] = useState<Shop[]>([]); // <-- USE Shop type
-  const [barbers, setBarbers] = useState<Barber[]>([]); // <-- USE Barber type
+  // State to hold fetched data as full objects/strings
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [barbers, setBarbers] = useState<Barber[]>([]);
   const [dates, setDates] = useState<string[]>([]);
   const [times, setTimes] = useState<string[]>([]);
 
@@ -50,9 +48,9 @@ export default function BookingPage() {
     dates: false,
     times: false,
   });
-  const [error, setError] = useState<string | null>(null); // <-- Add error state
+  const [error, setError] = useState<string | null>(null);
 
-  // --- NEW useEffect 1: Fetch all shops on component mount ---
+  // Fetch all shops on component mount
   useEffect(() => {
     const fetchShops = async () => {
       setIsLoading((prev) => ({ ...prev, shops: true }));
@@ -68,51 +66,51 @@ export default function BookingPage() {
       }
     };
     fetchShops();
-  }, []); // Empty dependency array means this runs only once on mount
+  }, []);
 
-  // --- NEW useEffect 2: Fetch barbers when selectedShop changes ---
+  // Fetch barbers when selectedShopId changes
   useEffect(() => {
-    if (selectedShop) {
+    if (selectedShopId) {
       const fetchBarbers = async () => {
         setIsLoading((prev) => ({ ...prev, barbers: true }));
         setError(null);
         try {
-          const fetchedBarbers = await getBarbersByShopId(selectedShop);
+          const fetchedBarbers = await getBarbersByShopId(selectedShopId);
           setBarbers(fetchedBarbers);
           // Reset subsequent selections
-          setSelectedBarber(null);
+          setSelectedBarberId(null);
           setSelectedDate(null);
           setSelectedTime(null);
         } catch (err) {
           console.error(
-            `Error fetching barbers for shop ${selectedShop}:`,
+            `Error fetching barbers for shop ${selectedShopId}:`,
             err
           );
           setError(`Failed to load barbers for selected shop.`);
-          setBarbers([]); // Clear barbers on error
+          setBarbers([]);
         } finally {
           setIsLoading((prev) => ({ ...prev, barbers: false }));
         }
       };
       fetchBarbers();
     } else {
-      setBarbers([]); // Clear barbers if no shop is selected
-      setSelectedBarber(null);
+      setBarbers([]);
+      setSelectedBarberId(null);
       setSelectedDate(null);
       setSelectedTime(null);
     }
-  }, [selectedShop]); // Reruns whenever selectedShop changes
+  }, [selectedShopId]);
 
-  // --- NEW useEffect 3: Fetch dates when selectedBarber changes ---
+  // Fetch dates when selectedBarberId changes
   useEffect(() => {
-    if (selectedShop && selectedBarber) {
+    if (selectedShopId && selectedBarberId) {
       const fetchDates = async () => {
         setIsLoading((prev) => ({ ...prev, dates: true }));
         setError(null);
         try {
           const fetchedDates = await getAvailableDates(
-            selectedShop,
-            selectedBarber
+            selectedShopId,
+            selectedBarberId
           );
           setDates(fetchedDates);
           // Reset subsequent selections
@@ -120,7 +118,7 @@ export default function BookingPage() {
           setSelectedTime(null);
         } catch (err) {
           console.error(
-            `Error fetching dates for barber ${selectedBarber}:`,
+            `Error fetching dates for barber ${selectedBarberId}:`,
             err
           );
           setError(`Failed to load available dates.`);
@@ -131,22 +129,27 @@ export default function BookingPage() {
       };
       fetchDates();
     } else {
-      setDates([]); // Clear dates if no barber is selected
+      setDates([]);
       setSelectedDate(null);
       setSelectedTime(null);
     }
-  }, [selectedShop, selectedBarber]); // Reruns when shop OR barber changes
+  }, [selectedShopId, selectedBarberId]);
 
-  // --- NEW useEffect 4: Fetch time slots when selectedDate changes ---
+  // Fetch time slots when selectedDate changes
   useEffect(() => {
-    if (selectedShop && selectedBarber && selectedDate && totalDuration > 0) {
+    if (
+      selectedShopId &&
+      selectedBarberId &&
+      selectedDate &&
+      totalDuration > 0
+    ) {
       const fetchTimes = async () => {
         setIsLoading((prev) => ({ ...prev, times: true }));
         setError(null);
         try {
           const fetchedTimes = await getAvailableSlots(
-            selectedShop,
-            selectedBarber,
+            selectedShopId,
+            selectedBarberId,
             selectedDate,
             totalDuration
           );
@@ -163,27 +166,31 @@ export default function BookingPage() {
       };
       fetchTimes();
     } else {
-      setTimes([]); // Clear times if dependencies are missing
+      setTimes([]);
       setSelectedTime(null);
     }
-  }, [selectedShop, selectedBarber, selectedDate, totalDuration]); // Reruns if any of these change
+  }, [selectedShopId, selectedBarberId, selectedDate, totalDuration]);
 
-  // --- Helper to format date string for display ---
+  // Helper to format date string for display
   const formatDateForDisplay = (dateStr: string) => {
     return formatInTimeZone(dateStr, SHOP_TIMEZONE, "EEE, MMM d");
   };
 
   const handleNextClick = () => {
-    if (selectedShop && selectedBarber && selectedDate && selectedTime) {
+    // Find the full shop and barber objects from our state arrays
+    const shop = shops.find((s) => s.id === selectedShopId);
+    const barber = barbers.find((b) => b.id === selectedBarberId);
+
+    if (shop && barber && selectedDate && selectedTime) {
+      // Save the FULL objects to the context
       setBookingSelections({
-        shopId: selectedShop,
-        barberId: selectedBarber,
+        shop: shop,
+        barber: barber,
         date: selectedDate,
         time: selectedTime,
       });
       router.push("/confirm");
     } else {
-      // This is a safety check, should not happen if button is disabled correctly
       alert("Please complete all selections before proceeding.");
     }
   };
@@ -215,7 +222,6 @@ export default function BookingPage() {
           <CardTitle>Cart Summary</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* ... your existing cart summary JSX ... */}
           {selectedServices.length === 0 ? (
             <p className="text-muted-foreground">No services selected yet.</p>
           ) : (
@@ -250,9 +256,9 @@ export default function BookingPage() {
             <p>Loading shops...</p>
           ) : (
             <Select
-              onValueChange={(value) => setSelectedShop(value)}
-              value={selectedShop ?? ""}
-              disabled={isLoading.shops || shops.length === 0} // Disable if loading or no shops
+              onValueChange={(value) => setSelectedShopId(value)}
+              value={selectedShopId ?? ""}
+              disabled={isLoading.shops || shops.length === 0}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a Shop" />
@@ -270,7 +276,7 @@ export default function BookingPage() {
       </Card>
 
       {/* Step 2: Choose a Barber (conditionally rendered) */}
-      {selectedShop && (
+      {selectedShopId && (
         <Card>
           <CardHeader>
             <CardTitle>Step 2: Choose a Barber</CardTitle>
@@ -280,9 +286,9 @@ export default function BookingPage() {
               <p>Loading barbers...</p>
             ) : (
               <Select
-                onValueChange={(value) => setSelectedBarber(value)}
-                value={selectedBarber ?? ""}
-                disabled={isLoading.barbers || barbers.length === 0} // Disable if loading or no barbers
+                onValueChange={(value) => setSelectedBarberId(value)}
+                value={selectedBarberId ?? ""}
+                disabled={isLoading.barbers || barbers.length === 0}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a Barber" />
@@ -301,7 +307,7 @@ export default function BookingPage() {
       )}
 
       {/* Step 3: Choose a Date (conditionally rendered) */}
-      {selectedBarber && (
+      {selectedBarberId && (
         <Card>
           <CardHeader>
             <CardTitle>Step 3: Choose a Date</CardTitle>
@@ -330,7 +336,7 @@ export default function BookingPage() {
         </Card>
       )}
 
-      {/* Step 4: Choose a Time Slot (UPDATED) */}
+      {/* Step 4: Choose a Time Slot (conditionally rendered) */}
       {selectedDate && (
         <Card>
           <CardHeader>

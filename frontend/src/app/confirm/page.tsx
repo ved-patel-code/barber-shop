@@ -15,32 +15,32 @@ import {
 import { useRouter } from "next/navigation";
 import { useCart } from "../components/context/CartContext";
 import { createAppointment } from "@/lib/api";
-import { formatInTimeZone, zonedTimeToUtc } from "date-fns-tz";
+import { zonedTimeToUtc } from "date-fns-tz";
 import { SHOP_TIMEZONE } from "@/lib/utils";
 import { AxiosError } from "axios";
+import type { AppointmentPayload } from "@/lib/types";
 
 export default function ConfirmPage() {
   const router = useRouter();
-  const { selectedServices, bookingSelections, clearCart } = useCart();
-  // --- NEW: State for form inputs ---
+  const {selectedServices,bookingSelections,clearCart } = useCart();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [gender, setGender] = useState(""); // Can be an empty string
-
-  // --- NEW: State for submission status ---
+  const [gender, setGender] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // --- Button is enabled only if name and phone are filled ---
   const isFormValid = name.trim() !== "" && phone.trim() !== "";
 
   const handleBookAppointment = async () => {
+    const { shop, barber, date, time } = bookingSelections;
+
     if (
       !isFormValid ||
-      !bookingSelections.shopId ||
-      !bookingSelections.barberId ||
-      !bookingSelections.date ||
-      !bookingSelections.time
+      !shop ||
+      !barber ||
+      !date ||
+      !time ||
+      selectedServices.length === 0
     ) {
       setError("Booking information is incomplete. Please start over.");
       return;
@@ -49,39 +49,37 @@ export default function ConfirmPage() {
     setIsSubmitting(true);
     setError(null);
 
-    // Combine date and time to create the ISO 8601 start_time string
-    const localDateTimeString = `${bookingSelections.date}T${bookingSelections.time}`;
-
-    // 2. Interpret this string as a date/time in the SHOP's timezone.
-    const utcDate = zonedTimeToUtc(localDateTimeString, SHOP_TIMEZONE);
-
-    // 3. Format this UTC date into the ISO string the backend expects.
+    const utcDate = zonedTimeToUtc(`${date}T${time}`, SHOP_TIMEZONE);
     const startTimeISO = utcDate.toISOString();
 
     try {
-      // Construct the payload for the API
-      const payload = {
-        customer: { name, phone_number: phone, gender: gender || null },
-        shop_id: bookingSelections.shopId,
-        barber_id: bookingSelections.barberId,
+      const payload: AppointmentPayload = {
+        customer_name: name,
+        customer_phone: phone,
+        customer_gender: gender || null,
+        shop_id: shop.id,
+        shop_name: shop.name,
+        barber_id: barber.id,
+        barber_name: barber.name,
         start_time: startTimeISO,
-        service_ids: selectedServices.map((s) => s.id),
+        service_snapshots: selectedServices.map((s) => ({
+          id: s.id,
+          name: s.name,
+          duration: s.duration,
+          price: s.price,
+        })),
+        tax_rate: shop.tax_rate,
+        is_walk_in: false,
+        status: "Booked",
       };
 
-      // Make the API call
       await createAppointment(payload);
-
-      // On success: clear the cart and redirect
       clearCart();
       router.push("/success");
     } catch (err) {
-      // <-- The 'err' is now of type 'unknown' by default in modern TS
-
       let errorMessage = "An unexpected error occurred.";
 
-      // --- NEW: Type guard to check if it's an AxiosError ---
       if (err instanceof AxiosError) {
-        // Now TypeScript knows that 'err' has a 'response' property
         errorMessage =
           err.response?.data?.detail || "An error occurred during booking.";
       }
@@ -102,7 +100,6 @@ export default function ConfirmPage() {
           <CardTitle>Customer Information</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Name Field */}
           <div className="space-y-2">
             <label
               htmlFor="name"
@@ -120,7 +117,6 @@ export default function ConfirmPage() {
             />
           </div>
 
-          {/* Phone Field */}
           <div className="space-y-2">
             <label
               htmlFor="phone"
@@ -138,7 +134,6 @@ export default function ConfirmPage() {
             />
           </div>
 
-          {/* Gender Dropdown */}
           <div className="space-y-2">
             <label
               htmlFor="gender"
@@ -162,10 +157,8 @@ export default function ConfirmPage() {
             </Select>
           </div>
 
-          {/* Display API Error if any */}
           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
-          {/* Book Appointment Button */}
           <div className="flex justify-end pt-4">
             <Button
               onClick={handleBookAppointment}
