@@ -21,6 +21,7 @@ class Shop(AppwriteBaseModel):
     name: str
     address: str
     phone_number: str
+    tax_rate: float 
 
 # --- Barber Schemas ---
 class Barber(AppwriteBaseModel):
@@ -33,29 +34,57 @@ class CustomerCreate(BaseModel):
     phone_number: str
     gender: Optional[str] = None # Gender is optional
 
+
+class ServiceSnapshot(BaseModel):
+    id: str
+    name: str
+    duration: int
+    price: float
+
 class AppointmentCreate(BaseModel):
-    """Schema for the full appointment booking request body."""
-    customer: CustomerCreate
+    """Schema for the new, denormalized appointment booking request body."""
+    # Customer info is now flat
+    customer_name: str
+    customer_phone: str
+    customer_gender: Optional[str] = None
+    
+    # Shop and Barber info
     shop_id: str
-    barber_id: str # No longer optional, must be a specific ID
+    shop_name: str
+    barber_id: str
+    barber_name: str
+    
+    # Time and services
     start_time: datetime
-    service_ids: List[str]
+    service_snapshots: List[ServiceSnapshot] # Frontend sends a list of service objects
+    tax_rate: float # Frontend sends the tax rate
+    
+    # Status flags
     is_walk_in: bool = False
-    # --- NEW: Add an optional status field ---
-    status: Optional[Literal["Booked", "InProgress"]] = "Booked" # Default to "Booked"
+    status: Optional[Literal["Booked", "InProgress"]] = "Booked"
+
 
 
 class AppointmentDetails(AppwriteBaseModel):
-    customer_id: str
-    barber_id: str
     shop_id: str
-    start_time: datetime # Pydantic will parse the ISO string from Appwrite
+    shop_name: str
+    barber_id: str
+    barber_name: str
+    customer_name: str
+    customer_phone: str
+    customer_gender: Optional[str] = None
+    
+    start_time: datetime
     end_time: datetime
     status: str
+    
     bill_amount: float
     total_amount: float
+    tax_rate_snapshot: float
     payment_status: bool
     is_walk_in: bool
+    
+    services_snapshot: str # The response will contain the JSON string
 
 
 class AppointmentStatusUpdate(BaseModel):

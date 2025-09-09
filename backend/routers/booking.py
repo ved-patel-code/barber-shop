@@ -1,6 +1,7 @@
 # backend/routers/booking.py
 
 import asyncio
+import json
 from fastapi import APIRouter, HTTPException
 from typing import List
 from appwrite.query import Query
@@ -130,150 +131,75 @@ async def get_available_slots(shop_id: str, barber_id: str, date_str: str, total
         )
     
 
-@router.post("/appointments", status_code=201)
+@router.post("/appointments", response_model=schemas.AppointmentDetails, status_code=201)
 async def create_appointment(appointment_data: schemas.AppointmentCreate):
     """
-    Creates a new appointment after performing a final double-booking check.
+    Creates a new, denormalized appointment record in a single database call
+    after performing a final double-booking check.
     """
+    # --- Part 1: Calculate Totals from Incoming Data ---
+    # No database calls needed here anymore!
+    total_duration = sum(service.duration for service in appointment_data.service_snapshots)
+    bill_amount = sum(service.price for service in appointment_data.service_snapshots)
+    total_amount = bill_amount * (1 + appointment_data.tax_rate)
     
-    # --- Part 1: Calculate Total Duration (Replaces the placeholder) ---
-    total_duration = 0
-    bill_amount = 0.0
-    services_documents = []
-    try:
-        # Fetch all selected services to calculate total duration and price
-        for service_id in appointment_data.service_ids:
-            service = databases.get_document(
-                database_id=APPWRITE_DATABASE_ID,
-                collection_id=COLLECTION_SERVICES,
-                document_id=service_id
-            )
-            services_documents.append(service)
-            total_duration += service['duration']
-            bill_amount += service['price']
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=f"One or more services not found: {e}")
-
     appointment_end_time = appointment_data.start_time + timedelta(minutes=total_duration)
 
-
-
     try:
-# --- CHANGE 1: CONVERT TIMES TO UTC FOR DOUBLE-BOOKING CHECK ---
-        # Treat the incoming naive times as being in our target timezone, then convert to UTC for the query
+        # --- Part 2: Final Double-Booking Check (No change in logic) ---
         local_start_check = appointment_data.start_time.replace(tzinfo=TARGET_TIMEZONE)
         local_end_check = appointment_end_time.replace(tzinfo=TARGET_TIMEZONE)
         utc_start_check = local_start_check.astimezone(timezone.utc)
         utc_end_check = local_end_check.astimezone(timezone.utc)
-        # We need to check for any appointments that *overlap* with the requested slot.
-        # An overlap occurs if an existing appointment:
-        # 1. Starts during our requested slot.
-        # 2. Ends during our requested slot.
-        # 3. Starts before and ends after our requested slot (envelops it).
-        
-        # A simpler way to query this is to find any appointment for the barber where:
-        # (Existing Start < Our End) AND (Existing End > Our Start)
         
         overlapping_appointments_response = databases.list_documents(
             database_id=APPWRITE_DATABASE_ID,
             collection_id=COLLECTION_APPOINTMENTS,
             queries=[
                 Query.equal("barber_id", [appointment_data.barber_id]),
-                Query.not_equal("status", ["Cancelled"]),
+                Query.not_equal("status", "Cancelled"),
                 Query.less_than("start_time", utc_end_check.isoformat()),
                 Query.greater_than("end_time", utc_start_check.isoformat())
             ]
         )
 
         if overlapping_appointments_response['documents']:
-            # If the list is NOT empty, we found a conflict.
-            raise HTTPException(
-                status_code=409, # 409 Conflict is the standard response for this
-                detail="This time slot has just been booked. Please select another slot."
-            )
+            raise HTTPException(status_code=409, detail="This time slot has just been booked. Please select another slot.")
         
-         # --- Part 3: Create the Customer Record (NEW LOGIC) ---
+        # --- Part 3: Create the Single, Denormalized Appointment Document ---
         
-        # As per the requirement, we will always create a new customer for each booking.
-        # 'unique()' is Appwrite's keyword to generate a unique ID.
-        new_customer_id = 'unique()'
+        # Convert the list of service snapshots to a JSON string for storage
+        services_json_string = json.dumps([s.dict() for s in appointment_data.service_snapshots])
         
-        customer_document = databases.create_document(
-            database_id=APPWRITE_DATABASE_ID,
-            collection_id=COLLECTION_CUSTOMERS,
-            document_id=new_customer_id,
-            data={
-                "name": appointment_data.customer.name,
-                "phone_number": appointment_data.customer.phone_number,
-                "gender": appointment_data.customer.gender
-            }
-        )
-        
-        created_customer_id = customer_document['$id']
-        print(f"Successfully created new customer with ID: {created_customer_id}")
-        
-    
-    # --- Part 4: Calculate Final Price & Create Appointment (NEW LOGIC) ---
-        
-    # Fetch the shop to get its tax rate
-        shop_document = databases.get_document(
-            database_id=APPWRITE_DATABASE_ID,
-            collection_id=COLLECTION_SHOPS,
-            document_id=appointment_data.shop_id
-        )
-        tax_rate = shop_document['tax_rate']
-        total_amount = bill_amount * (1 + tax_rate)
+        new_appointment_data = {
+            "shop_id": appointment_data.shop_id,
+            "shop_name": appointment_data.shop_name,
+            "barber_id": appointment_data.barber_id,
+            "barber_name": appointment_data.barber_name,
+            "customer_name": appointment_data.customer_name,
+            "customer_phone": appointment_data.customer_phone,
+            "customer_gender": appointment_data.customer_gender,
+            "start_time": utc_start_check.isoformat(),
+            "end_time": utc_end_check.isoformat(),
+            "status": appointment_data.status,
+            "is_walk_in": appointment_data.is_walk_in,
+            "payment_status": False,
+            "bill_amount": bill_amount,
+            "total_amount": round(total_amount, 2),
+            "tax_rate_snapshot": appointment_data.tax_rate,
+            "services_snapshot": services_json_string
+        }
 
-        appointment_status = appointment_data.status
-
-        # Create the appointment document
-        new_appointment_id = 'unique()'
-        appointment_document = databases.create_document(
+        created_document = databases.create_document(
             database_id=APPWRITE_DATABASE_ID,
             collection_id=COLLECTION_APPOINTMENTS,
-            document_id=new_appointment_id,
-            data={
-                "customer_id": created_customer_id,
-                "barber_id": appointment_data.barber_id,
-                "shop_id": appointment_data.shop_id,
-                "start_time": utc_start_check.isoformat(), # Use UTC time
-                "end_time": utc_end_check.isoformat(),     # Use UTC time
-                "status": appointment_status,
-                "is_walk_in": appointment_data.is_walk_in,
-                "payment_status": False,
-                "bill_amount": bill_amount,
-                "total_amount": round(total_amount, 2)
-            }
+            document_id='unique()',
+            data=new_appointment_data
         )
-        created_appointment_id = appointment_document['$id']
-        print(f"Successfully created new appointment with ID: {created_appointment_id}")
 
-        # --- Part 5: Create Appointment_Services "Snapshot" Records (NEW LOGIC) ---
+        print(f"Successfully created denormalized appointment with ID: {created_document['$id']}")
         
-        # Now, loop through the service documents we fetched at the beginning
-        for service in services_documents:
-            # For each service, create a linking document in the junction collection
-            databases.create_document(
-                database_id=APPWRITE_DATABASE_ID,
-                collection_id=COLLECTION_APPOINTMENT_SERVICES,
-                document_id='unique()',
-                data={
-                    "appointment_id": created_appointment_id,
-                    "service_id": service['$id'],
-                    "price_at_booking": service['price'], # Snapshot the price
-                    "duration_at_booking": service['duration'] # Snapshot the duration
-                }
-            )
-        
-        print(f"Successfully created {len(services_documents)} service snapshots for appointment {created_appointment_id}")
-
-        # Final successful response
-        return {
-            "status": "success", 
-            "message": "Appointment successfully booked.",
-            "appointment_id": created_appointment_id,
-            "customer_id": created_customer_id
-        }
+        return created_document # FastAPI will validate this against AppointmentDetails
 
     except HTTPException as http_exc:
         raise http_exc
