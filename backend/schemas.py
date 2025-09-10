@@ -26,6 +26,7 @@ class Shop(AppwriteBaseModel):
 # --- Barber Schemas ---
 class Barber(AppwriteBaseModel):
     name: str
+    contact_info: Optional[str] = None
 
 
 class CustomerCreate(BaseModel):
@@ -117,3 +118,13 @@ class FinancialsReport(BaseModel):
     total_revenue_after_tax: float
     total_appointments: int
     filter_period: str
+
+class DailyScheduleResponse(BaseModel):
+    day_of_week: str
+    start_time: str
+    end_time: str
+    is_day_off: bool
+
+# Represents the full weekly schedule response
+class WeeklyScheduleResponse(BaseModel):
+    schedules: List[DailyScheduleResponse]

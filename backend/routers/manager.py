@@ -327,3 +327,51 @@ async def get_manager_financials(
     except Exception as e:
         print(f"An error occurred while generating financials: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate financial report.")
+    
+@router.get("/staff/{barberId}/schedule", response_model=schemas.WeeklyScheduleResponse)
+async def get_barber_schedule(barberId: str):
+    """
+    Fetches the full weekly schedule for a specific barber.
+    If a schedule for a day is not set, it defaults to a day off.
+    """
+    try:
+        # 1. Fetch all existing schedule documents for this barber
+        existing_schedule_response = databases.list_documents(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SCHEDULES,
+            queries=[Query.equal("barber_id", [barberId]), Query.limit(7)] # Limit to 7 for safety
+        )
+
+        # 2. Create a lookup map for easy access
+        schedule_map = {
+            item['day_of_week']: item for item in existing_schedule_response['documents']
+        }
+
+        # 3. Build a complete 7-day schedule, filling in any gaps
+        full_week_schedule = []
+        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+        for day in days:
+            if day in schedule_map:
+                # If a schedule exists in the DB, use it
+                day_data = schedule_map[day]
+                full_week_schedule.append({
+                    "day_of_week": day,
+                    "start_time": day_data['start_time'],
+                    "end_time": day_data['end_time'],
+                    "is_day_off": day_data['is_day_off']
+                })
+            else:
+                # If no schedule exists in the DB for this day, create a default "day off"
+                full_week_schedule.append({
+                    "day_of_week": day,
+                    "start_time": "00:00",
+                    "end_time": "00:00",
+                    "is_day_off": "true"
+                })
+        
+        return {"schedules": full_week_schedule}
+
+    except Exception as e:
+        print(f"An error occurred while fetching schedule: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch barber's schedule.")
