@@ -141,3 +141,11 @@ export interface UpdateSchedulePayload {
     is_day_off: boolean;
   }[];
 }
+
+export interface FinancialsReport {
+  total_revenue_before_tax: number;
+  total_tax_collected: number;
+  total_revenue_after_tax: number;
+  total_appointments: number;
+  filter_period: string; // e.g., "for date 2025-09-15"
+}

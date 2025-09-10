@@ -15,6 +15,7 @@ import type {
   ScheduleDay,
   BarberScheduleResponse,
   UpdateSchedulePayload,
+  FinancialsReport,  
 } from "./types";
 
 const api = axios.create({
@@ -290,4 +291,33 @@ export const updateBarberSchedule = async (
     throw error; // Re-throw to be handled by the component
   }
 };
+
+export const getFinancials = async (
+  shopId: string,
+  // Use an object for filters to make it clean
+  filters: { date?: string; month?: string } // date: "YYYY-MM-DD", month: "YYYY-MM"
+): Promise<FinancialsReport | null> => {
+  try {
+    const response = await api.get<FinancialsReport>(
+      "/api/manager/financials",
+      {
+        params: {
+          shop_id: shopId,
+          ...filters, // Spread the date or month filter into the params
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    // Check if the error is an Axios error to inspect the response
+    if (axios.isAxiosError(error) && error.response) {
+      console.error("Failed to fetch financials:", error.response.data);
+    } else {
+      console.error("Failed to fetch financials:", error);
+    }
+    // Return null on failure so the UI can handle it gracefully
+    return null;
+  }
+};
+
 export default api;
