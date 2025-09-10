@@ -1,11 +1,12 @@
+// src/app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
-import Header from "./components/shared/Header";
-import { CartProvider } from "./components/context/CartContext";
 
+// This metadata can be general, as it will be overridden by more
+// specific metadata in the child layouts if needed.
 export const metadata: Metadata = {
   title: "Barber Shop",
-  description: "Book your barber appointment online",
+  description: "Your one-stop shop for premium grooming.",
 };
 
 export default function RootLayout({
@@ -16,10 +17,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <CartProvider>
-          <Header />
-          <main>{children}</main>
-        </CartProvider>
+        {/*
+          This layout is now clean. It does NOT include the <Header> or <CartProvider>.
+          Those have been moved to the (public) layout, so they will only apply
+          to the public-facing pages. The children will be either the public
+          layout's content or the manager layout's content.
+        */}
+        {children}
       </body>
     </html>
   );

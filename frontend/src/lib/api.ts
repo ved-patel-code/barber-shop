@@ -9,6 +9,12 @@ import type {
   RawShopDocument, // <-- NEW
   RawBarberDocument, // <-- NEW
   AppointmentPayload,
+  ManagerAppointment,
+  RawManagerAppointment,
+  AppointmentStatus,
+  ScheduleDay,
+  BarberScheduleResponse,
+  UpdateSchedulePayload,
 } from "./types";
 
 const api = axios.create({
@@ -61,6 +67,7 @@ export const getBarbersByShopId = async (shopId: string): Promise<Barber[]> => {
     const barbers = response.data.map((barber: RawBarberDocument) => ({
       id: barber.$id,
       name: barber.name,
+      contact_info: barber.contact_info || null,
     }));
     return barbers;
   } catch (error) {
@@ -116,4 +123,171 @@ export const createAppointment = async (payload: AppointmentPayload) => {
   return response.data;
 };
 
+
+export const getManagerAppointments = async (
+  shopId: string,
+  date: string // Date must be in "YYYY-MM-DD" format
+): Promise<ManagerAppointment[]> => {
+  try {
+    // Tell axios to expect an array of our NEW RawManagerAppointment type
+    const response = await api.get<RawManagerAppointment[]>("/api/manager/appointments", {
+      params: {
+        shop_id: shopId,
+        date: date,
+      },
+    });
+
+    // Process the raw data to create clean, usable objects
+    const appointments: ManagerAppointment[] = response.data.map((rawAppointment) => {
+      // The 'rawAppointment' object now correctly has a '$id' property
+      return {
+        // Explicitly map the fields from raw to clean
+        id: rawAppointment.$id, // <-- THE CRITICAL FIX
+        shop_id: rawAppointment.shop_id,
+        shop_name: rawAppointment.shop_name,
+        barber_id: rawAppointment.barber_id,
+        barber_name: rawAppointment.barber_name,
+        customer_name: rawAppointment.customer_name,
+        customer_phone: rawAppointment.customer_phone,
+        customer_gender: rawAppointment.customer_gender,
+        start_time: rawAppointment.start_time,
+        end_time: rawAppointment.end_time,
+        status: rawAppointment.status,
+        total_amount: rawAppointment.total_amount,
+        // IMPORTANT: Parse the JSON string into a usable array of objects
+        services_snapshot: JSON.parse(rawAppointment.services_snapshot || '[]'),
+      };
+    });
+
+    return appointments;
+  } catch (error) {
+    console.error("Failed to fetch manager appointments:", error);
+    return [];
+  }
+};
+
+export const updateAppointmentStatus = async (
+  appointmentId: string,
+  status: AppointmentStatus
+): Promise<ManagerAppointment> => {
+  // We wrap this in a try...catch block to handle potential network errors
+  try {
+    const response = await api.patch<ManagerAppointment>(
+      `/api/manager/appointments/${appointmentId}/status`,
+      { status } // The request body as per the API docs
+    );
+    // The backend returns the full, updated appointment object, which we return
+    return response.data;
+  } catch (error) {
+    console.error(`Failed to update status for appointment ${appointmentId}:`, error);
+    // Re-throw the error to be caught by the component's logic
+    throw error;
+  }
+};
+
+export const getAvailableBarbers = async (
+  shopId: string,
+  duration: number
+): Promise<Barber[]> => {
+  // Don't make an API call if duration is zero or less
+  if (duration <= 0) {
+    return [];
+  }
+  try {
+    // The backend expects `RawBarberDocument` which has `$id`
+    const response = await api.get<RawBarberDocument[]>(
+      "/api/manager/available-barbers",
+      {
+        params: {
+          shop_id: shopId,
+          duration: duration,
+        },
+      }
+    );
+    // Map the raw response to our clean `Barber` type
+    const barbers = response.data.map((barber) => ({
+      id: barber.$id,
+      name: barber.name,
+      contact_info: null,
+    }));
+    return barbers;
+  } catch (error) {
+    console.error("Failed to fetch available barbers:", error);
+    return [];
+  }
+};
+
+export const getShopById = async (shopId: string): Promise<Shop | null> => {
+  try {
+    // We don't have a direct /api/shops/{id} endpoint, so we fetch all
+    // and find the one we need. This is acceptable since there are only 2 shops.
+    // If there were many shops, a dedicated backend endpoint would be better.
+    const allShops = await getAllShops();
+    const shop = allShops.find((s) => s.id === shopId);
+    return shop || null;
+  } catch (error) {
+    console.error(`Failed to fetch details for shop ${shopId}:`, error);
+    return null;
+  }
+};
+
+export const addStaff = async (
+  shopId: string,
+  payload: { name: string; contact_info: string }
+): Promise<Barber> => {
+  try {
+    const response = await api.post<RawBarberDocument>(
+      "/api/manager/staff",
+      payload,
+      {
+        params: { shop_id: shopId },
+      }
+    );
+    // Map the raw response to our clean Barber type
+    return {
+      id: response.data.$id,
+      name: response.data.name,
+      contact_info: response.data.contact_info || null,
+    };
+  } catch (error) {
+    console.error("Failed to add staff:", error);
+    throw error; // Re-throw to be handled by the component
+  }
+};
+
+export const getBarberSchedule = async (
+  barberId: string
+): Promise<ScheduleDay[]> => {
+  try {
+    const response = await api.get<BarberScheduleResponse>(
+      `/api/manager/staff/${barberId}/schedule`
+    );
+    // The API response nests the array inside a "schedules" key
+    return response.data.schedules;
+  } catch (error) {
+    console.error(`Failed to fetch schedule for barber ${barberId}:`, error);
+    // Return an empty array on error so the UI doesn't crash
+    return [];
+  }
+};
+
+export const updateBarberSchedule = async (
+  barberId: string,
+  shopId: string,
+  payload: UpdateSchedulePayload
+): Promise<any> => {
+  try {
+    const response = await api.post(
+      `/api/manager/staff/${barberId}/schedule`,
+      payload,
+      {
+        params: { shop_id: shopId }, // <-- ADD shop_id as a query parameter
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(`Failed to update schedule for barber ${barberId}:`, error);
+    throw error; // Re-throw to be handled by the component
+  }
+};
 export default api;

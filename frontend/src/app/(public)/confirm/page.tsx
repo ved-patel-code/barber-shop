@@ -22,7 +22,7 @@ import type { AppointmentPayload } from "@/lib/types";
 
 export default function ConfirmPage() {
   const router = useRouter();
-  const {selectedServices,bookingSelections,clearCart } = useCart();
+  const { selectedServices, bookingSelections, clearCart } = useCart();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
