@@ -17,7 +17,7 @@ import type {
   UpdateSchedulePayload,
   FinancialsReport,
   OwnerStaffMember,
-  NewShopPayload 
+  NewShopPayload
 } from "./types";
 
 const api = axios.create({
@@ -278,13 +278,15 @@ export const updateBarberSchedule = async (
   barberId: string,
   shopId: string,
   payload: UpdateSchedulePayload
-): Promise<any> => {
+): Promise<BarberScheduleResponse> => {
+  // <-- FIX: Replaced 'any' with the specific type
   try {
-    const response = await api.post(
+    // Add the expected response type to the api.post call for better type safety
+    const response = await api.post<BarberScheduleResponse>(
       `/api/manager/staff/${barberId}/schedule`,
       payload,
       {
-        params: { shop_id: shopId }, // <-- ADD shop_id as a query parameter
+        params: { shop_id: shopId },
       }
     );
     return response.data;

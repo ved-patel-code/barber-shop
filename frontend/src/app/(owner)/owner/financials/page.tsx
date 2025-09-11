@@ -78,9 +78,13 @@ export default function FinancialsPage() {
             filter_period: "No data for this period.",
           }
         );
-      } catch (error: any) {
-        const errorMessage =
-          error.message || "An error occurred while fetching the report.";
+      } catch (error: unknown) {
+        // <-- FIX: Changed 'any' to 'unknown'
+        // Type guard to safely handle the error
+        let errorMessage = "An error occurred while fetching the report.";
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
         toast.error(errorMessage);
         setReport(initialReportState);
       } finally {

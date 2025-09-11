@@ -22,7 +22,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Validation schema for the form
 const staffSchema = z.object({
   name: z
     .string()
@@ -37,7 +36,7 @@ interface AddStaffDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   shopId: string;
-  onSuccess: () => void; // Callback to refresh the staff list
+  onSuccess: () => void;
 }
 
 export function AddStaffDialog({
@@ -59,7 +58,7 @@ export function AddStaffDialog({
 
   const handleDialogChange = (open: boolean) => {
     if (!open) {
-      reset(); // Reset form fields when dialog is closed
+      reset();
     }
     onOpenChange(open);
   };
@@ -69,8 +68,9 @@ export function AddStaffDialog({
     try {
       await addStaff(shopId, data);
       toast.success("Staff member added successfully!");
-      onSuccess(); // Trigger the callback to refresh and close
-    } catch (error) {
+      onSuccess();
+    } catch (_error) {
+      // --- FIX 1: Unused 'error' variable is now '_error' ---
       toast.error("Failed to add staff. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -83,8 +83,9 @@ export function AddStaffDialog({
         <form onSubmit={handleSubmit(onSubmit)}>
           <DialogHeader>
             <DialogTitle>Add New Staff Member</DialogTitle>
+            {/* --- FIX 2: Replaced ' with &apos; --- */}
             <DialogDescription>
-              Enter the details below. Click save when you're done.
+              Enter the details below. Click save when you&apos;re done.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

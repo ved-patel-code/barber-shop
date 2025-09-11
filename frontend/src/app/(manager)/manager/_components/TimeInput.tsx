@@ -5,14 +5,10 @@ import * as React from "react";
 import { Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// The props now directly extend the standard Input HTML Attributes
-export interface TimeInputProps
-  extends React.InputHTMLAttributes<HTMLInputElement> {}
+// --- FIX: Converted the empty interface to a type alias ---
+export type TimeInputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
-  // --- THE CRITICAL FIX ---
-  // We no longer separate 'disabled' in the function signature.
-  // We let it remain inside the main 'props' object.
   ({ className, ...props }, ref) => {
     const localRef = React.useRef<HTMLInputElement>(null);
 
@@ -27,7 +23,6 @@ const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
     );
 
     const handleClick = () => {
-      // Block both disabled and readOnly
       if (props.disabled || props.readOnly) {
         return;
       }
@@ -38,8 +33,9 @@ const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
       <div
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
-          // The cursor and opacity are now correctly driven by props.disabled
-          props.disabled ? "cursor-not-allowed opacity-50" : "cursor-text",
+          props.disabled || props.readOnly
+            ? "cursor-not-allowed opacity-50"
+            : "cursor-text",
           className
         )}
         onClick={handleClick}
@@ -54,7 +50,6 @@ const TimeInput = React.forwardRef<HTMLInputElement, TimeInputProps>(
             appearance: "none",
             colorScheme: "dark",
           }}
-          // Pass all props, including the 'disabled' state, down to the input
           {...props}
         />
         <Clock className="h-4 w-4 text-muted-foreground" />

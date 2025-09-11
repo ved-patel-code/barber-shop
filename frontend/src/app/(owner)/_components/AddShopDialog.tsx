@@ -130,8 +130,8 @@ export function AddShopDialog({ onShopAdded, children }: AddShopDialogProps) {
         <DialogHeader>
           <DialogTitle>Add New Shop</DialogTitle>
           <DialogDescription>
-            Enter the details for the new shop location. Click save when you're
-            done.
+            Enter the details for the new shop location. Click save when
+            you&apos;re done.
           </DialogDescription>
         </DialogHeader>
 

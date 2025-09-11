@@ -71,7 +71,7 @@ export default function StaffPage() {
             Staff Management
           </h1>
           <p className="text-muted-foreground">
-            Add, view, and manage your shop's staff members.
+            Add, view, and manage your shop&apos;s staff members.
           </p>
         </div>
         <Button onClick={() => setAddStaffDialogOpen(true)}>
