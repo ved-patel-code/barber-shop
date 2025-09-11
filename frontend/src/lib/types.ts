@@ -44,6 +44,7 @@ export interface RawServiceDocument extends AppwriteDocument {
 }
 
 export interface RawShopDocument extends AppwriteDocument {
+  $id: string;
   name: string;
   address: string;
   phone_number: string;
@@ -148,4 +149,18 @@ export interface FinancialsReport {
   total_revenue_after_tax: number;
   total_appointments: number;
   filter_period: string; // e.g., "for date 2025-09-15"
+}
+
+export interface OwnerStaffMember {
+  id: string;
+  name: string;
+  contact_info: string | null;
+  shop_id: string;
+}
+
+export interface OwnerStaffMember {
+  id: string;
+  name: string;
+  contact_info: string | null;
+  shop_id: string; // The shop this staff member belongs to
 }

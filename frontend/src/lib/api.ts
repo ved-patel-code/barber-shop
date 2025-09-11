@@ -15,7 +15,8 @@ import type {
   ScheduleDay,
   BarberScheduleResponse,
   UpdateSchedulePayload,
-  FinancialsReport,  
+  FinancialsReport,
+  OwnerStaffMember,
 } from "./types";
 
 const api = axios.create({
@@ -317,6 +318,69 @@ export const getFinancials = async (
     }
     // Return null on failure so the UI can handle it gracefully
     return null;
+  }
+};
+
+export const getOwnerShops = async (): Promise<Shop[]> => {
+  try {
+    const response = await api.get<RawShopDocument[]>("/api/owner/shops");
+    const shops = response.data.map((shop: RawShopDocument) => ({
+      id: shop.$id, // map $id → id
+      name: shop.name,
+      address: shop.address,
+      phone_number: shop.phone_number,
+      tax_rate: shop.tax_rate,
+    }));
+    return shops;
+  } catch (error) {
+    console.error("Failed to fetch owner shops:", error);
+    return [];
+  }
+};
+
+export const getOwnerStaff = async (
+  shopId?: string
+): Promise<OwnerStaffMember[]> => {
+  try {
+    const response = await api.get<OwnerStaffMember[]>("/api/owner/staff", {
+      // Axios will automatically omit the 'shop_id' param if `shopId` is undefined
+      params: { shop_id: shopId },
+    });
+    // The API response matches our type, so no mapping is needed.
+    return response.data;
+  } catch (error) {
+    console.error("Failed to fetch owner staff list:", error);
+    // Return an empty array on failure so the UI doesn't crash
+    return [];
+  }
+};
+
+export const getOwnerFinancials = async (
+  filters: { shop_id?: string; date?: string; month?: string } // date: "YYYY-MM-DD", month: "YYYY-MM"
+): Promise<FinancialsReport | null> => {
+  try {
+    const response = await api.get<FinancialsReport>(
+      "/api/owner/financials", // Owner specific endpoint
+      {
+        params: {
+          ...filters, // Spread the shop_id, date or month filter into the params
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      console.error("Failed to fetch owner financials:", error.response.data);
+      // Re-throw specific error for bad requests if needed for UI messaging
+      if (error.response.status === 400) {
+        throw new Error(
+          error.response.data.detail || "Invalid filter combination."
+        );
+      }
+    } else {
+      console.error("Failed to fetch owner financials:", error);
+    }
+    return null; // Return null on failure so the UI can handle it gracefully
   }
 };
 
