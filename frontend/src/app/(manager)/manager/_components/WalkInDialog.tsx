@@ -6,7 +6,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { formatISO } from "date-fns";
-import { Loader2, Clock, ArrowLeft } from "lucide-react";
+// --- 1. Import the DollarSign icon ---
+import { Loader2, Clock, ArrowLeft, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -39,7 +40,6 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Validation schema for the customer details form
 const customerSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   phone: z.string().min(10, { message: "Please enter a valid phone number." }),
@@ -62,25 +62,19 @@ export function WalkInDialog({
 }: WalkInDialogProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Shop details state
   const [shopDetails, setShopDetails] = useState<{
     name: string;
     tax_rate: number;
   } | null>(null);
-
-  // Step 1 State
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [isFetchingServices, setIsFetchingServices] = useState(false);
   const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(
     new Set()
   );
-
   const [availableBarbers, setAvailableBarbers] = useState<Barber[]>([]);
   const [isFetchingBarbers, setIsFetchingBarbers] = useState(false);
   const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
 
-  // React Hook Form for Step 2
   const {
     register,
     handleSubmit,
@@ -90,7 +84,6 @@ export function WalkInDialog({
     resolver: zodResolver(customerSchema),
   });
 
-  // Fetch shop details and services when dialog opens
   useEffect(() => {
     if (isOpen) {
       getShopById(shopId).then(setShopDetails);
@@ -104,10 +97,16 @@ export function WalkInDialog({
     }
   }, [isOpen, shopId, allServices.length]);
 
-  const { totalDuration, selectedServices } = useMemo(() => {
+  // --- 2. Update the useMemo hook to calculate totalPrice ---
+  const { totalDuration, totalPrice, selectedServices } = useMemo(() => {
     const selected = allServices.filter((s) => selectedServiceIds.has(s.id));
     const duration = selected.reduce((sum, s) => sum + s.duration, 0);
-    return { totalDuration: duration, selectedServices: selected };
+    const price = selected.reduce((sum, s) => sum + s.price, 0); // Calculate price
+    return {
+      totalDuration: duration,
+      totalPrice: price, // Return price
+      selectedServices: selected,
+    };
   }, [selectedServiceIds, allServices]);
 
   useEffect(() => {
@@ -153,7 +152,6 @@ export function WalkInDialog({
       toast.error("Missing barber or shop information.");
       return;
     }
-
     setIsSubmitting(true);
     const selectedBarber = availableBarbers.find(
       (b) => b.id === selectedBarberId
@@ -163,14 +161,12 @@ export function WalkInDialog({
       setIsSubmitting(false);
       return;
     }
-
     const service_snapshots: ServiceSnapshot[] = selectedServices.map((s) => ({
       id: s.id,
       name: s.name,
       duration: s.duration,
       price: s.price,
     }));
-
     try {
       await createAppointment({
         customer_name: data.name,
@@ -180,7 +176,7 @@ export function WalkInDialog({
         shop_name: shopDetails.name,
         barber_id: selectedBarber.id,
         barber_name: selectedBarber.name,
-        start_time: formatISO(new Date()), // Use current time for walk-in
+        start_time: formatISO(new Date()),
         service_snapshots,
         tax_rate: shopDetails.tax_rate,
         is_walk_in: true,
@@ -188,18 +184,25 @@ export function WalkInDialog({
       });
       toast.success("Walk-in appointment created successfully!");
       resetAllState();
-      onSuccess(); // Close dialog and refresh parent page
-    } catch (error) {
+      onSuccess();
+    } catch (_error) {
       toast.error("Failed to create appointment. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // --- 3. Add a currency formatting helper function ---
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
+  };
+
   const renderStepOne = () => (
-    // ... (This function is unchanged from the previous step)
     <>
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         <div className="flex flex-col gap-4">
           <h4 className="font-semibold">Select Services</h4>
           <ScrollArea className="h-64 border rounded-md p-4">
@@ -220,7 +223,7 @@ export function WalkInDialog({
                     />
                     <label
                       htmlFor={service.id}
-                      className="flex-grow text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                      className="flex-grow text-sm font-medium cursor-pointer"
                     >
                       {service.name}
                     </label>
@@ -230,9 +233,18 @@ export function WalkInDialog({
             )}
           </ScrollArea>
         </div>
+
         <div className="flex flex-col gap-4">
           <h4 className="font-semibold">Summary</h4>
           <div className="border rounded-md p-4 space-y-3">
+            {/* --- 4. Add the Total Price display to the UI --- */}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Total Price</span>
+              <div className="flex items-center gap-2 font-semibold">
+                <DollarSign className="h-4 w-4" />
+                <span>{formatCurrency(totalPrice)}</span>
+              </div>
+            </div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Total Duration</span>
               <div className="flex items-center gap-2 font-semibold">

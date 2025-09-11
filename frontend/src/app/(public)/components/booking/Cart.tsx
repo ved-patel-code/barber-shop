@@ -1,4 +1,4 @@
-// src/app/components/booking/Cart.tsx
+// src/app/(public)/components/booking/Cart.tsx
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -30,32 +30,42 @@ export default function Cart({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-4">
-      <Card className="container mx-auto max-w-4xl shadow-lg">
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-2 sm:p-4">
+      <Card className="container mx-auto max-w-4xl shadow-2xl">
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-4">
-            <ScrollArea className="h-24 w-full max-w-md">
-              <div className="space-y-2 pr-4">
+            {/* --- 1. SERVICE LIST (Desktop/Tablet View Only) --- */}
+            {/* This entire section is hidden on screens smaller than 640px */}
+            <ScrollArea className="hidden sm:block flex-1 h-24 pr-4">
+              <div className="space-y-2">
                 {selectedServices.map((service) => (
                   <div
                     key={service.id}
                     className="flex justify-between items-center text-sm"
                   >
-                    <span className="font-medium">{service.name}</span>
-                    <span className="text-muted-foreground">
+                    <p className="font-medium truncate pr-2">{service.name}</p>
+                    <p className="text-muted-foreground whitespace-nowrap">
                       ${service.price.toFixed(2)}
-                    </span>
+                    </p>
                   </div>
                 ))}
               </div>
             </ScrollArea>
 
-            <Separator orientation="vertical" className="h-24 mx-4" />
+            {/* --- 2. VERTICAL SEPARATOR (Desktop/Tablet View Only) --- */}
+            <Separator
+              orientation="vertical"
+              className="h-24 mx-2 hidden sm:block"
+            />
 
-            <div className="flex flex-col items-end justify-between h-24 min-w-[200px]">
-              <div className="text-right">
+            {/* --- 3. TOTALS & BUTTON (Adapts to Screen Size) --- */}
+            {/* On mobile, this div expands to fill the entire cart. */}
+            {/* On larger screens, it shrinks to fit its content. */}
+            <div className="flex flex-1 sm:flex-none items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+              {/* Totals Section */}
+              <div className="text-left">
                 <p className="text-sm text-muted-foreground">
-                  Total Duration:{" "}
+                  Duration:{" "}
                   <span className="font-bold text-foreground">
                     {totalDuration} mins
                   </span>
@@ -64,7 +74,13 @@ export default function Cart({
                   Total: ${totalPrice.toFixed(2)}
                 </p>
               </div>
-              <Button onClick={handleNextClick} className="w-full cursor-pointer">
+
+              {/* Next Button */}
+              <Button
+                onClick={handleNextClick}
+                className="cursor-pointer"
+                size="lg"
+              >
                 Next
               </Button>
             </div>
