@@ -17,6 +17,7 @@ import type {
   UpdateSchedulePayload,
   FinancialsReport,
   OwnerStaffMember,
+  NewShopPayload 
 } from "./types";
 
 const api = axios.create({
@@ -381,6 +382,17 @@ export const getOwnerFinancials = async (
       console.error("Failed to fetch owner financials:", error);
     }
     return null; // Return null on failure so the UI can handle it gracefully
+  }
+};
+
+export const createShop = async (payload: NewShopPayload): Promise<Shop> => {
+  try {
+    const response = await api.post<Shop>("/api/owner/shops", payload);
+    return response.data;
+  } catch (error) {
+    console.error("Failed to create shop:", error);
+    // Re-throw the error so the component's catch block can handle it for UI feedback
+    throw error;
   }
 };
 

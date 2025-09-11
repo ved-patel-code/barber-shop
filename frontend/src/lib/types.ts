@@ -164,3 +164,10 @@ export interface OwnerStaffMember {
   contact_info: string | null;
   shop_id: string; // The shop this staff member belongs to
 }
+
+export interface NewShopPayload {
+  name: string;
+  address: string;
+  phone_number: string;
+  tax_rate: number; // The decimal value, e.g., 0.18
+}
