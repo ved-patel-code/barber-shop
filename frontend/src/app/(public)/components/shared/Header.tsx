@@ -11,6 +11,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 const navLinks = [
   { href: "/", label: "Home" },
   { href: "/services", label: "Services" },
+  { href: "/about", label: "About Us" },
+  { href: "/timings", label: "Timings" },
 ];
 
 export default function Header() {
