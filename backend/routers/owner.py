@@ -172,3 +172,28 @@ async def get_owner_financials(
     except Exception as e:
         print(f"An error occurred while generating owner financials: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate financial report.")
+    
+@router.post("/shops", response_model=schemas.Shop, status_code=201)
+async def create_shop(shop_data: schemas.ShopCreate):
+    """
+    Creates a new shop in the database.
+    """
+    try:
+        # Pydantic's .dict() method converts the model to a dictionary suitable for Appwrite
+        new_shop_data = shop_data.dict()
+
+        # Call the Appwrite SDK to create the new document
+        created_document = databases.create_document(
+            database_id=APPWRITE_DATABASE_ID,
+            collection_id=COLLECTION_SHOPS,
+            document_id='unique()', # Let Appwrite generate a unique ID
+            data=new_shop_data
+        )
+
+        # Return the full document of the newly created shop
+        # FastAPI will validate it against the `schemas.Shop` response model
+        return created_document
+
+    except Exception as e:
+        print(f"An error occurred while creating a new shop: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create the new shop.")

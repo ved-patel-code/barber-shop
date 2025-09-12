@@ -128,3 +128,10 @@ class DailyScheduleResponse(BaseModel):
 # Represents the full weekly schedule response
 class WeeklyScheduleResponse(BaseModel):
     schedules: List[DailyScheduleResponse]
+
+class ShopCreate(BaseModel):
+    name: str
+    address: str
+    phone_number: str
+    # Add validation to ensure tax_rate is a sensible percentage (e.g., between 0 and 1)
+    tax_rate: float = Field(..., gt=0, lt=1)
