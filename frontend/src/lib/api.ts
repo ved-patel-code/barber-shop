@@ -398,4 +398,18 @@ export const createShop = async (payload: NewShopPayload): Promise<Shop> => {
   }
 };
 
+export const pingBackend = async () => {
+  try {
+    // We don't need the response data, so we just await the request.
+    await api.get("/");
+    // Optional: log to the console for debugging to see that it's working.
+    console.log(
+      `Backend ping successful at: ${new Date().toLocaleTimeString()}`
+    );
+  } catch (error) {
+    // Even if you don't expect errors, it's good practice to handle them.
+    console.error("Backend ping failed:", error);
+  }
+};
+
 export default api;

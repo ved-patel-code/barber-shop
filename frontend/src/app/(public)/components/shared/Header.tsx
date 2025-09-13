@@ -1,12 +1,14 @@
 // src/app/(public)/components/shared/Header.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch"; // ✅ shadcn switch
+import { pingBackend } from "@/lib/api"; // ✅ your ping function
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -15,8 +17,36 @@ const navLinks = [
   { href: "/timings", label: "Timings" },
 ];
 
+// ✅ Make interval configurable
+const PING_INTERVAL = 60000; // 1 minute (change this value as needed)
+
 export default function Header() {
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pingEnabled, setPingEnabled] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ Handle pinging logic
+  useEffect(() => {
+    if (pingEnabled) {
+      // Start interval
+      intervalRef.current = setInterval(() => {
+        pingBackend();
+      }, PING_INTERVAL);
+      // Run once immediately too
+      pingBackend();
+    } else {
+      // Clear interval when off
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [pingEnabled]);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -26,7 +56,7 @@ export default function Header() {
           <Link href="/" className="font-bold text-lg mr-4">
             BarberShop
           </Link>
-          {/* Desktop Navigation: Hidden on small screens, visible on medium and up */}
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
             {navLinks.map((link) => (
               <Link
@@ -37,22 +67,21 @@ export default function Header() {
                 {link.label}
               </Link>
             ))}
-            {/* --- MOVED "Book Appointment" BUTTON FOR DESKTOP --- */}
             <Link href="/book">
               <Button className="cursor-pointer" size="sm">
-                {" "}
-                {/* Use sm size for nav bar */}
                 Book Appointment
               </Button>
             </Link>
+            {/* ✅ Desktop Switch */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Ping</span>
+              <Switch checked={pingEnabled} onCheckedChange={setPingEnabled} />
+            </div>
           </nav>
         </div>
 
-        {/* Right Side: ONLY Mobile Menu (Hamburger) now */}
-        {/* The "Book Appointment" button for mobile will be inside the Sheet */}
+        {/* Mobile Hamburger */}
         <div className="flex items-center gap-2 md:hidden">
-          {" "}
-          {/* Hide this div on desktop */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="outline" size="icon">
@@ -76,10 +105,7 @@ export default function Header() {
                       {link.label}
                     </Link>
                   ))}
-                  {/* --- "Book Appointment" BUTTON FOR MOBILE (inside Sheet) --- */}
                   <Link href="/book" className="block mt-4">
-                    {" "}
-                    {/* Added block and margin-top */}
                     <Button
                       className="cursor-pointer w-full"
                       size="lg"
@@ -88,6 +114,14 @@ export default function Header() {
                       Book Appointment
                     </Button>
                   </Link>
+                  {/* ✅ Mobile Switch */}
+                  <div className="flex items-center justify-between pt-4">
+                    <span className="text-sm text-muted-foreground">Ping</span>
+                    <Switch
+                      checked={pingEnabled}
+                      onCheckedChange={setPingEnabled}
+                    />
+                  </div>
                 </nav>
               </div>
             </SheetContent>
